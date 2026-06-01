@@ -386,6 +386,11 @@ def experiment_simultaneous_macrocov_marginalcov(
         tune_sm, tune_labels = cal_sm[:n_tune], cal_labels[:n_tune]
         prop_sm, prop_labels = cal_sm[n_tune:], cal_labels[n_tune:]
 
+        # *** TEMP: set lambda manually
+        # best_lam = 0.6
+        # print(f"FOR DEBUGGING: USING FIXED LAMBDA={best_lam}")
+
+        # Identify best lambda
         best_lam = _tune_lambda_loo(tune_sm, tune_labels, num_classes,
                                     alpha_macro, alpha_marginal, lambda_grid,
                                     train_class_distr)
@@ -398,8 +403,6 @@ def experiment_simultaneous_macrocov_marginalcov(
 
         # *** TEMP: Try double dipping in the data
         print("FOR DEBUGGING: DOUBLE DIPPING ")
-        tune_sm = cal_sm
-        tune_labels = cal_labels
         prop_sm = cal_sm
         prop_labels = cal_labels
 
