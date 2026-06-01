@@ -462,3 +462,61 @@ def experiment_simultaneous_macrocov_marginalcov(
             all_results.setdefault(method, []).append(met)
 
     return _aggregate(all_results)
+
+
+# ---------------------------------------------------------------------------
+# Alpha-2 grid sweep (debugging: which constraint is binding?)
+# ---------------------------------------------------------------------------
+
+def experiment_alpha2_grid(data, alpha_1, alpha_2, n_splits=20, cal_frac=0.2):
+    """
+    Sweep over alpha_2 with alpha_1 fixed.  For each seed, computes:
+        q_macro = compute_weighted_qhat(true_scores, alpha_1, macro_weights)
+        q_marg  = standard_qhat(true_scores, alpha_2)
+        qhat    = max(q_macro, q_marg)
+    for both softmax and PAS scores.
+
+    Returns _aggregate results with metrics marginal_cov, macro_cov, avg_set_size,
+    plus binding_macro (fraction of seeds where q_macro >= q_marg).
+    """
+    num_classes = data['num_classes']
+    softmax_all = data['softmax']
+    labels = data['labels']
+    all_results = {}
+    keep = ('marginal_cov', 'macro_cov', 'avg_set_size')
+
+    for seed in range(n_splits):
+        cal_sm, cal_labels, test_sm, test_labels = random_cal_test_split(
+            softmax_all, labels, cal_frac=cal_frac, seed=seed
+        )
+        train_class_distr = _get_train_class_distr(data, cal_labels)
+
+        cal_sd = {
+            'softmax': get_conformal_scores(cal_sm, 'softmax'),
+            'PAS':     get_conformal_scores(cal_sm, 'PAS', train_class_distr),
+        }
+        test_sd = {
+            'softmax': get_conformal_scores(test_sm, 'softmax'),
+            'PAS':     get_conformal_scores(test_sm, 'PAS', train_class_distr),
+        }
+
+        w_macro = macro_weights(cal_labels, num_classes)
+
+        def m(psets):
+            full = compute_metrics(psets, test_labels, num_classes)
+            return {k: full[k] for k in keep}
+
+        results = {}
+        for score in ('softmax', 'PAS'):
+            ts = _true_scores(cal_sd[score], cal_labels)
+            q_macro = compute_weighted_qhat(ts, alpha_1, w_macro)
+            q_marg  = standard_qhat(ts, alpha_2)
+            qhat    = max(q_macro, q_marg)
+            metrics = m(create_prediction_sets(test_sd[score], qhat))
+            metrics['binding_macro'] = float(q_macro >= q_marg)
+            results[f'Simultaneous | {score}'] = metrics
+
+        for method, met in results.items():
+            all_results.setdefault(method, []).append(met)
+
+    return _aggregate(all_results)
