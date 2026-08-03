@@ -107,6 +107,7 @@ def save_table_latex(title, results, out_path, alpha=None, label=None):
 
     _score_latex  = {'softmax': r'$s_{\softmax}$', 'GroupPAS': r'$\hat{s}_{g,w}$'}
     _method_latex = {'Standard': r'\standard', 'Classwise': r'\classwise',
+                     'Mondrian': r'\mondrian',
                      'Label-weighted': r'\labelw'}
 
     parsed = []

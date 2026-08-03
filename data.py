@@ -9,10 +9,11 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def load_inputs(dataset='plantnet', base_dir=None):
     """
-    Returns dict: {softmax, labels, num_classes, train_labels (optional)}
-    softmax      : (n, K) float32
-    labels       : (n,)   int64
-    train_labels : (n_train,) int64, loaded from {dataset}_train_labels.npy if present
+    Returns dict: {softmax, labels, num_classes, train_labels (optional), train_softmax (optional)}
+    softmax        : (n, K) float32
+    labels         : (n,)   int64
+    train_labels   : (n_train,) int64,    loaded from train_labels.npy if present
+    train_softmax  : (n_train, K) float32, loaded from train_softmax_scores.npy if present
     """
     if base_dir is None:
         base_dir = os.path.join(_THIS_DIR, 'data')
@@ -20,9 +21,12 @@ def load_inputs(dataset='plantnet', base_dir=None):
     labels = np.load(os.path.join(base_dir, dataset, 'labels.npy')).astype(np.int64)
     num_classes = softmax.shape[1]
     out = dict(softmax=softmax, labels=labels, num_classes=num_classes)
-    train_labels_path = os.path.join(base_dir, dataset, f'train_labels.npy')
+    train_labels_path = os.path.join(base_dir, dataset, 'train_labels.npy')
     if os.path.exists(train_labels_path):
         out['train_labels'] = np.load(train_labels_path).astype(np.int64)
+    train_sm_path = os.path.join(base_dir, dataset, 'train_softmax_scores.npy')
+    if os.path.exists(train_sm_path):
+        out['train_softmax'] = np.load(train_sm_path)
     return out
 
 

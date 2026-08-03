@@ -22,9 +22,9 @@ from experiment_setup import experiment_simultaneous_macrocov_marginalcov
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 _METRIC_DISPLAY = {
-    'marginal_cov': r'$\mathrm{MarginalCov}$',
-    'macro_cov':    r'$\mathrm{MacroCov}$',
-    'avg_set_size': r'$\mathrm{AvgSize}$',
+    'marginal_cov': 'MarginalCov',
+    'macro_cov':    'MacroCov',
+    'avg_set_size': 'AvgSize',
 }
 
 _DATASET_LATEX = {
@@ -111,9 +111,10 @@ def save_table_latex(title, results, out_path, alpha_macro=None, alpha_marginal=
         'WPAS':    r'$\hat{s}_{\lambda}$',
     }
     _method_latex = {
-        'Standard':     r'\standard',
-        'Classwise':    r'\classwise',
-        'Simultaneous': r'\labelw',
+        'Standard':       r'\standard',
+        'Classwise':      r'\classwise',
+        'Label-weighted': r'\labelw',
+        'Simultaneous':   r'\simult',
     }
 
     parsed = []
@@ -168,6 +169,10 @@ def main():
                         help='Fraction of cal set used for lambda tuning (rest used for quantile)')
     parser.add_argument('--lambda_steps', type=int, default=11,
                         help='Number of lambda values in [0,1] grid')
+    parser.add_argument('--tune_on_train', action='store_true', default=True,
+                        help='Tune lambda on training data (default). All cal data used for quantile.')
+    parser.add_argument('--tune_on_cal', dest='tune_on_train', action='store_false',
+                        help='Tune lambda on calibration data (double-dip mode).')
     args = parser.parse_args()
 
     dataset = args.dataset
@@ -175,9 +180,10 @@ def main():
     alpha_marginal = args.alpha_marginal
     lambda_grid = np.linspace(0.0, 1.0, args.lambda_steps)
 
+    tune_mode = 'train' if args.tune_on_train else 'cal'
     print(f'Dataset: {dataset}  |  cal_frac={args.cal_frac}  |  tune_frac={args.tune_frac}  |  n_seeds={args.n_seeds}')
     print(f'alpha_macro={alpha_macro}  |  alpha_marginal={alpha_marginal}')
-    print(f'lambda_grid: {args.lambda_steps} values in [0, 1]')
+    print(f'lambda_grid: {args.lambda_steps} values in [0, 1]  |  lambda tuning on: {tune_mode}')
 
     data = load_inputs(dataset=dataset)
     print(f'Loaded {len(data["labels"])} examples, {data["num_classes"]} classes.')
@@ -193,6 +199,7 @@ def main():
         cal_frac=args.cal_frac,
         tune_frac=args.tune_frac,
         lambda_grid=lambda_grid,
+        tune_on_train=args.tune_on_train,
     )
     elapsed = time.time() - t0
 
@@ -203,7 +210,7 @@ def main():
 
     out_path = os.path.join(
         _THIS_DIR, 'results',
-        f'simultaneous_{dataset}_alpha_macro={alpha_macro}_alpha_marginal={alpha_marginal}.txt')
+        f'simultaneous_{dataset}_alpha_macro={alpha_macro}_alpha_marginal={alpha_marginal}_tune={tune_mode}.txt')
     label = f'tab:{dataset}_simultaneous_alpha_macro={alpha_macro}_alpha_marginal={alpha_marginal}'
     save_table_latex(title, results, out_path,
                      alpha_macro=alpha_macro, alpha_marginal=alpha_marginal, label=label)

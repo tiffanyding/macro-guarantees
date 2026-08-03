@@ -4,8 +4,12 @@ from conformal import (
     get_conformal_scores,
     macro_weights,
     weighted_macro_weights, group_weights, group_macro_weights,
-    compute_weighted_qhat, standard_qhat, classwise_qhats,
+    compute_weighted_qhat, standard_qhat, classwise_qhats, mondrian_qhats,
     create_prediction_sets, compute_metrics,
+)
+from baselines import (
+    get_aps_scores_all, get_raps_scores_all,
+    clustered_conformal, compute_rc3p_params, create_rc3p_prediction_sets,
 )
 from data import random_cal_test_split
 
@@ -115,30 +119,77 @@ def _true_scores(scores_all, labels):
 # Main results
 # ---------------------------------------------------------------------------
 
-def experiment_main_results(data, alpha=0.1, n_splits=20, cal_frac=0.2):
+_DEFAULT_MAIN_METHODS = ('standard', 'classwise', 'label_weighted')
+
+
+def experiment_main_results(data, alpha=0.1, n_splits=20, cal_frac=0.2,
+                            methods=_DEFAULT_MAIN_METHODS,
+                            raps_lambda=0.01, raps_kreg=5):
     """
-    Main results table: Standard, Classwise, Label-weighted × {softmax, PAS}.
+    Main results table.
+
+    methods : iterable of {'standard', 'classwise', 'label_weighted', 'clustered', 'rc3p', 'tacp'}
+        Which baselines to include. Default reproduces the original table:
+        Standard, Classwise, Label-weighted x {softmax, PAS}.
+        'clustered' (Clustered CP) and 'rc3p' (RC3P) are each run against all
+        four scores: softmax, PAS, APS, RAPS.
+        'tacp' (Tail-Aware CP) is not yet implemented.
+    raps_lambda, raps_kreg : RAPS regularization hyperparameters (only used if
+        'clustered' or 'rc3p' is requested).
+
     Reports MarginalCov, MacroCov (over all test classes), AvgSize.
     """
+    methods = set(methods)
+    if 'tacp' in methods:
+        raise NotImplementedError('TACP is not yet implemented')
+    need_aps_raps = bool(methods & {'clustered', 'rc3p'})
+
     def methods_fn(cal_score_dict, cal_labels, test_sd, test_labels, alpha, num_classes, seed):
         m = lambda psets: compute_metrics(psets, test_labels, num_classes)
         results = {}
 
-        q = standard_qhat(_true_scores(cal_score_dict['softmax'], cal_labels), alpha)
-        results['Standard | softmax'] = m(create_prediction_sets(test_sd['softmax'], q))
+        if 'standard' in methods:
+            q = standard_qhat(_true_scores(cal_score_dict['softmax'], cal_labels), alpha)
+            results['Standard | softmax'] = m(create_prediction_sets(test_sd['softmax'], q))
 
-        q = standard_qhat(_true_scores(cal_score_dict['PAS'], cal_labels), alpha)
-        results['Standard | PAS'] = m(create_prediction_sets(test_sd['PAS'], q))
+            q = standard_qhat(_true_scores(cal_score_dict['PAS'], cal_labels), alpha)
+            results['Standard | PAS'] = m(create_prediction_sets(test_sd['PAS'], q))
 
-        qhats = classwise_qhats(_true_scores(cal_score_dict['softmax'], cal_labels), cal_labels, num_classes, alpha)
-        results['Classwise | softmax'] = m(create_prediction_sets(test_sd['softmax'], qhats))
+        if 'classwise' in methods:
+            qhats = classwise_qhats(_true_scores(cal_score_dict['softmax'], cal_labels), cal_labels, num_classes, alpha)
+            results['Classwise | softmax'] = m(create_prediction_sets(test_sd['softmax'], qhats))
 
-        w = macro_weights(cal_labels, num_classes)
-        q = compute_weighted_qhat(_true_scores(cal_score_dict['softmax'], cal_labels), alpha, w)
-        results['Label-weighted | softmax'] = m(create_prediction_sets(test_sd['softmax'], q))
+        if 'label_weighted' in methods:
+            w = macro_weights(cal_labels, num_classes)
+            q = compute_weighted_qhat(_true_scores(cal_score_dict['softmax'], cal_labels), alpha, w)
+            results['Label-weighted | softmax'] = m(create_prediction_sets(test_sd['softmax'], q))
 
-        q = compute_weighted_qhat(_true_scores(cal_score_dict['PAS'], cal_labels), alpha, w)
-        results['Label-weighted | PAS'] = m(create_prediction_sets(test_sd['PAS'], q))
+            q = compute_weighted_qhat(_true_scores(cal_score_dict['PAS'], cal_labels), alpha, w)
+            results['Label-weighted | PAS'] = m(create_prediction_sets(test_sd['PAS'], q))
+
+        if need_aps_raps:
+            # Recover raw softmax probabilities: get_conformal_scores('softmax') = 1 - softmax
+            cal_raw_sm = 1.0 - cal_score_dict['softmax']
+            test_raw_sm = 1.0 - test_sd['softmax']
+
+            score_dict_ext = dict(cal_score_dict)
+            score_dict_ext['APS'] = get_aps_scores_all(cal_raw_sm, seed=seed)
+            score_dict_ext['RAPS'] = get_raps_scores_all(cal_raw_sm, lmbda=raps_lambda, kreg=raps_kreg, seed=seed)
+
+            test_sd_ext = dict(test_sd)
+            test_sd_ext['APS'] = get_aps_scores_all(test_raw_sm, seed=seed)
+            test_sd_ext['RAPS'] = get_raps_scores_all(test_raw_sm, lmbda=raps_lambda, kreg=raps_kreg, seed=seed)
+
+            if 'clustered' in methods:
+                for score_name in ('softmax', 'PAS', 'APS', 'RAPS'):
+                    qhats = clustered_conformal(score_dict_ext[score_name], cal_labels, alpha, seed=seed)
+                    results[f'Clustered | {score_name}'] = m(create_prediction_sets(test_sd_ext[score_name], qhats))
+
+            if 'rc3p' in methods:
+                for score_name in ('softmax', 'PAS', 'APS', 'RAPS'):
+                    q_hats, k_hats, _ = compute_rc3p_params(cal_raw_sm, score_dict_ext[score_name], cal_labels, alpha)
+                    preds = create_rc3p_prediction_sets(test_raw_sm, test_sd_ext[score_name], q_hats, k_hats)
+                    results[f'RC3P | {score_name}'] = m(preds)
 
         return results
 
@@ -244,7 +295,12 @@ def experiment_genus_macrocov(data, alpha, n_splits, cal_frac, genus_assignments
 
     Methods: Standard | softmax, Standard | GroupPAS,
              Classwise | softmax,
+             Mondrian | softmax, Mondrian | GroupPAS,
              Label-weighted | softmax, Label-weighted | GroupPAS.
+
+    Mondrian pools cal scores across all classes in the same genus and uses
+    that pooled quantile as the threshold for every class in the genus.
+
     Metrics: marginal_cov, group_macro_cov (= GenusMacroCov), avg_set_size.
     """
     num_classes = data['num_classes']
@@ -286,6 +342,11 @@ def experiment_genus_macrocov(data, alpha, n_splits, cal_frac, genus_assignments
         qhats = classwise_qhats(_true_scores(cal_sd['softmax'], cal_labels),
                                 cal_labels, num_classes, alpha)
         results['Classwise | softmax'] = m(create_prediction_sets(test_sd['softmax'], qhats))
+
+        for score_name in ('softmax', 'GroupPAS'):
+            qhats = mondrian_qhats(_true_scores(cal_sd[score_name], cal_labels),
+                                   cal_labels, num_classes, alpha, genus_assignments)
+            results[f'Mondrian | {score_name}'] = m(create_prediction_sets(test_sd[score_name], qhats))
 
         w = group_macro_weights(cal_labels, num_classes, genus_assignments)
 
@@ -348,15 +409,62 @@ def _tune_lambda_loo(tune_softmax, tune_labels, num_classes,
     return best_lam
 
 
+def _tune_lambda_on_train(train_softmax, train_labels, n_cal,
+                          num_classes, alpha_macro, alpha_marginal,
+                          lambda_grid, train_class_distr, seed):
+    """
+    Tune lambda using training data only.
+    Splits train once into train_tune (size n_cal) and train_eval (remainder).
+    The same split is reused for all lambda values.
+    For each lambda: compute conformal threshold on train_tune, evaluate
+    avg set size on train_eval. Returns lambda with smallest avg set size.
+    """
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(len(train_labels))
+    tune_idx, eval_idx = idx[:n_cal], idx[n_cal:]
+
+    tune_sm,  tune_lbl = train_softmax[tune_idx], train_labels[tune_idx]
+    eval_sm,  eval_lbl = train_softmax[eval_idx],  train_labels[eval_idx]
+
+    w_macro = macro_weights(tune_lbl, num_classes)
+    w_norm  = w_macro / w_macro.sum()
+
+    best_lam = lambda_grid[0]
+    best_mean_size = np.inf
+
+    for lam in lambda_grid:
+        sim_weights = compute_sim_pas_weights(num_classes, train_class_distr, lam)
+
+        tune_scores = get_conformal_scores(tune_sm, 'WPAS', train_class_distr, sim_weights)
+        true_sc = tune_scores[np.arange(len(tune_lbl)), tune_lbl]
+        q_macro = compute_weighted_qhat(true_sc, alpha_macro, w_norm)
+        q_marg  = standard_qhat(true_sc, alpha_marginal)
+        q       = max(q_macro, q_marg)
+
+        eval_scores = get_conformal_scores(eval_sm, 'WPAS', train_class_distr, sim_weights)
+        mean_size   = float((eval_scores <= q).sum(axis=1).mean())
+
+        print(f'  lambda={lam:.3f}  avg_size={mean_size:.4f}')
+        if mean_size < best_mean_size:
+            best_mean_size = mean_size
+            best_lam = lam
+
+    print(f'  => selected lambda={best_lam:.3f} (avg_size={best_mean_size:.4f})')
+    return best_lam
+
+
 def experiment_simultaneous_macrocov_marginalcov(
         data, alpha_macro=0.1, alpha_marginal=0.05,
-        n_splits=20, cal_frac=0.2, tune_frac=0.5, lambda_grid=None):
+        n_splits=20, cal_frac=0.2, tune_frac=0.5, lambda_grid=None,
+        tune_on_train=True):
     """
     Simultaneous MacroCov >= 1-alpha_macro and MarginalCov >= 1-alpha_marginal.
 
     For softmax and PAS: quantiles are computed using all cal examples.
-    For WPAS: tune_frac of cal is used to tune lambda; the rest (proper_cal)
-    is used to compute quantiles.
+    For WPAS (tune_on_train=True, default): lambda is tuned on training data
+    (train is split into train_tune of size n_cal and train_eval); all cal data
+    is used for the quantile.
+    For WPAS (tune_on_train=False): lambda is tuned by double-dipping on cal data.
 
     train_class_distr is the normalized class distribution from train_labels
     (if available, else from all cal_labels). It serves as both the WPAS score
@@ -381,31 +489,25 @@ def experiment_simultaneous_macrocov_marginalcov(
         raw = _get_train_class_distr(data, cal_labels)
         train_class_distr = raw / raw.sum()
 
-        # Split cal into tune (lambda selection) + proper_cal (WPAS quantile)
-        n_tune = int(len(cal_labels) * tune_frac)
-        tune_sm, tune_labels = cal_sm[:n_tune], cal_labels[:n_tune]
-        prop_sm, prop_labels = cal_sm[n_tune:], cal_labels[n_tune:]
-
-        # *** TEMP: set lambda manually
-        # best_lam = 0.6
-        # print(f"FOR DEBUGGING: USING FIXED LAMBDA={best_lam}")
-
-        # Identify best lambda
-        best_lam = _tune_lambda_loo(tune_sm, tune_labels, num_classes,
-                                    alpha_macro, alpha_marginal, lambda_grid,
-                                    train_class_distr)
+        if tune_on_train:
+            best_lam = _tune_lambda_on_train(
+                data['train_softmax'], data['train_labels'],
+                n_cal=len(cal_labels),
+                num_classes=num_classes,
+                alpha_macro=alpha_macro, alpha_marginal=alpha_marginal,
+                lambda_grid=lambda_grid,
+                train_class_distr=train_class_distr,
+                seed=seed,
+            )
+            prop_sm, prop_labels = cal_sm, cal_labels
+        else:
+            print("NOTE: Double dipping in calibration data for lambda tuning and conformal threshold selection (this means no coverage guarantee, but works better practically)")
+            prop_sm, prop_labels = cal_sm, cal_labels
+            best_lam = _tune_lambda_loo(cal_sm, cal_labels, num_classes,
+                                        alpha_macro, alpha_marginal, lambda_grid,
+                                        train_class_distr)
 
         sim_weights = compute_sim_pas_weights(num_classes, train_class_distr, best_lam)
-
-        # # *** TEMP: Sanity check if issue is due to data splitting
-        # cal_sm = prop_sm
-        # cal_labels = prop_labels
-
-        # *** TEMP: Try double dipping in the data
-        print("FOR DEBUGGING: DOUBLE DIPPING ")
-        prop_sm = cal_sm
-        prop_labels = cal_labels
-
 
         # Softmax and PAS use ALL cal; WPAS uses proper_cal only
         cal_sd_all = {
@@ -440,6 +542,11 @@ def experiment_simultaneous_macrocov_marginalcov(
         qhats = classwise_qhats(_true_scores(cal_sd_all['softmax'], cal_labels),
                                 cal_labels, num_classes, alpha_base)
         results['Classwise | softmax'] = m(create_prediction_sets(test_sd['softmax'], qhats))
+
+        # Label-weighted | PAS: MacroCov only, no marginal guarantee
+        ts = _true_scores(cal_sd_all['PAS'], cal_labels)
+        q  = compute_weighted_qhat(ts, alpha_macro, w_macro_all)
+        results['Label-weighted | PAS'] = m(create_prediction_sets(test_sd['PAS'], q))
 
         # Simultaneous: softmax and PAS use all cal
         for score in ('softmax', 'PAS'):

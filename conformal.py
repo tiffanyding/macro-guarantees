@@ -197,6 +197,32 @@ def classwise_qhats(cal_scores_true, cal_labels, num_classes, alpha):
     return qhats
 
 
+def mondrian_qhats(cal_scores_true, cal_labels, num_classes, alpha, group_assignments):
+    """
+    Mondrian CP: pool cal scores by group (e.g. genus), compute one standard
+    qhat per group, and assign it to every class in that group.
+
+    group_assignments : (num_classes,) int array
+        group_assignments[k] is the group index (e.g. genus id) for class k.
+        Values must be 0..G-1 for some number of groups G. Classes in the
+        same group share a single pooled qhat.
+
+    Returns (K,) array. np.inf for classes whose group has no calibration
+    examples.
+    """
+    num_groups = int(group_assignments.max()) + 1
+    cal_groups = group_assignments[cal_labels]
+
+    group_qhat = np.full(num_groups, np.inf)
+    for g in range(num_groups):
+        idx = cal_groups == g
+        if idx.sum() == 0:
+            continue
+        group_qhat[g] = standard_qhat(cal_scores_true[idx], alpha)
+
+    return group_qhat[group_assignments]
+
+
 # ---------------------------------------------------------------------------
 # Prediction sets
 # ---------------------------------------------------------------------------

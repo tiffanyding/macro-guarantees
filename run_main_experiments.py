@@ -110,9 +110,11 @@ def save_table_latex(title, results, out_path, alpha=None, label=None):
             return f'\\textbf{{{mean_str}}} ({se_str})'
         return f'{mean_str} ({se_str})'
 
-    _score_latex  = {'softmax': r'$s_{\softmax}$', 'PAS': r'$s_{\PAS}$'}
+    _score_latex  = {'softmax': r'$s_{\softmax}$', 'PAS': r'$s_{\PAS}$',
+                     'APS': r'$s_{\mathrm{APS}}$', 'RAPS': r'$s_{\mathrm{RAPS}}$'}
     _method_latex = {'Standard': r'\standard', 'Classwise': r'\classwise',
-                     'Label-weighted': r'\labelw'}
+                     'Label-weighted': r'\labelw',
+                     'Clustered': r'\clustered', 'RC3P': r'\rcp'}
 
     # Parse 'Method | Score' keys
     parsed = []
@@ -165,12 +167,20 @@ def main():
                         help='Comma-separated miscoverage levels')
     parser.add_argument('--n_seeds', type=int, default=20)
     parser.add_argument('--cal_frac', type=float, default=0.1)
+    parser.add_argument('--methods', type=str, default='standard,classwise,label_weighted',
+                        help="Comma-separated list from: standard, classwise, label_weighted, "
+                             "clustered, rc3p, tacp (tacp is not yet implemented)")
+    parser.add_argument('--raps_lambda', type=float, default=0.01,
+                        help='RAPS regularization strength (only used by clustered/rc3p)')
+    parser.add_argument('--raps_kreg', type=int, default=5,
+                        help='RAPS rank threshold (only used by clustered/rc3p)')
     parser.add_argument('--no-diagnostics', dest='diagnostics',
                         action='store_false', default=True,
                         help='Skip cal-count plot and metrics file')
     args = parser.parse_args()
 
     alphas = [float(a.strip()) for a in args.alphas.split(',')]
+    methods = [m.strip() for m in args.methods.split(',')]
     dataset = args.dataset
 
     print(f'Dataset: {dataset}  |  cal_frac={args.cal_frac}  |  n_seeds={args.n_seeds}')
@@ -189,7 +199,8 @@ def main():
         print(f'\n=== alpha={alpha} ===')
         t0 = time.time()
         results = experiment_main_results(
-            data, alpha=alpha, n_splits=args.n_seeds, cal_frac=args.cal_frac)
+            data, alpha=alpha, n_splits=args.n_seeds, cal_frac=args.cal_frac,
+            methods=methods, raps_lambda=args.raps_lambda, raps_kreg=args.raps_kreg)
         elapsed = time.time() - t0
 
         dataset_latex = _DATASET_LATEX.get(dataset, dataset)
