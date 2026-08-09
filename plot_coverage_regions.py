@@ -26,8 +26,6 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET       = 'plantnet-trunc'
 N_SEEDS       = 20
 CAL_FRAC      = 0.2
-# TARGET_LEVELS = np.linspace(0.90, 0.99, 10)   # 1 - alpha values
-# TARGET_LEVELS = np.linspace(0.90, 0.99, 19)   # 1 - alpha values
 TARGET_LEVELS = np.linspace(0.80, 0.99, 39)   # 1 - alpha values
 ALPHA_VALS    = 1.0 - TARGET_LEVELS            # alpha_1 / alpha_2 values
 
@@ -171,80 +169,10 @@ def plot_coverage_grid(results, out_path=None):
                                   label=r'LWCP+PAS also achieves MarginalCov $\geq 1{-}\alpha_2$')
     blue_patch   = mpatches.Patch(color=(0.0, 0.0, 1.0), alpha=0.9,
                                   label=r'StdCP+softmax also achieves MacroCov $\geq 1{-}\alpha_1$')
-    # purple_patch = mpatches.Patch(color=(0.5, 0.0, 0.5), alpha=0.7, label='Both simultaneously')
     ax.legend(handles=[red_patch, blue_patch],
               loc='lower right', fontsize=7, framealpha=0.9)
 
     fig.suptitle(f'Coverage regions — {DATASET}  ({N_SEEDS} seeds)', fontsize=10, y=1.01)
-    plt.tight_layout()
-
-    if out_path:
-        os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
-        plt.savefig(out_path, dpi=150, bbox_inches='tight')
-        print(f'Saved: {out_path}')
-    plt.show()
-    plt.close(fig)
-
-
-# ---------------------------------------------------------------------------
-# Debug 2x2 grid
-# ---------------------------------------------------------------------------
-
-def plot_debug_grids(results, out_path=None):
-    """
-    2x2 figure showing the mean coverage value in each cell.
-
-    Layout:
-      [0,0] LWCP+PAS     | macro_cov    (guaranteed — should be >= 1-alpha_1)
-      [0,1] LWCP+PAS     | marginal_cov (bonus — determines red shading)
-      [1,0] StdCP+softmax | marginal_cov (guaranteed — should be >= 1-alpha_2)
-      [1,1] StdCP+softmax | macro_cov   (bonus — determines blue shading)
-
-    method1 metrics vary with alpha_1 only (cols), so each row is identical.
-    method2 metrics vary with alpha_2 only (rows), so each col is identical.
-    """
-    n = len(ALPHA_VALS)
-
-    # Broadcast 1D metric vectors to (n_alpha2, n_alpha1) grids
-    m1_macro = np.broadcast_to(results['m1_macro'][np.newaxis, :], (n, n))
-    m1_marg  = np.broadcast_to(results['m1_marg'] [np.newaxis, :], (n, n))
-    m2_marg  = np.broadcast_to(results['m2_marg'] [:, np.newaxis], (n, n))
-    m2_macro = np.broadcast_to(results['m2_macro'][:, np.newaxis], (n, n))
-
-    panels = [
-        (m1_macro, 'LWCP+PAS',      'macro_cov',    'guaranteed'),
-        (m1_marg,  'LWCP+PAS',      'marginal_cov', 'bonus → red shading'),
-        (m2_marg,  'StdCP+softmax', 'marginal_cov', 'guaranteed'),
-        (m2_macro, 'StdCP+softmax', 'macro_cov',    'bonus → blue shading'),
-    ]
-
-    step    = TARGET_LEVELS[1] - TARGET_LEVELS[0]
-    x_edges = np.r_[TARGET_LEVELS - step / 2, TARGET_LEVELS[-1] + step / 2]
-    cmap    = plt.cm.RdYlGn
-    vmin, vmax = 0.85, 1.0
-
-    fig, axes = plt.subplots(2, 2, figsize=(13, 11))
-
-    for ax, (vals, method, metric, subtitle) in zip(axes.flat, panels):
-        mesh = ax.pcolormesh(x_edges, x_edges, vals,
-                             cmap=cmap, vmin=vmin, vmax=vmax, shading='flat')
-
-        for j in range(n):       # alpha_2 index (y / row)
-            for i in range(n):   # alpha_1 index (x / col)
-                v          = vals[j, i]
-                norm_v     = (v - vmin) / (vmax - vmin)
-                text_color = 'white' if norm_v < 0.25 else 'black'
-                ax.text(TARGET_LEVELS[i], TARGET_LEVELS[j], f'{v:.3f}',
-                        ha='center', va='center', fontsize=6, color=text_color)
-
-        ax.plot([TARGET_LEVELS[0], TARGET_LEVELS[-1]],
-                [TARGET_LEVELS[0], TARGET_LEVELS[-1]],
-                'k--', lw=0.8, alpha=0.4)
-        _set_grid_axes(ax)
-        plt.colorbar(mesh, ax=ax, fraction=0.046, pad=0.04)
-        ax.set_title(f'{method} — {metric}\n({subtitle})', fontsize=9)
-
-    fig.suptitle(f'Debug: mean coverage values — {DATASET}  ({N_SEEDS} seeds)', fontsize=11)
     plt.tight_layout()
 
     if out_path:
@@ -269,8 +197,6 @@ def main():
     base = os.path.join(_THIS_DIR, 'results')
     plot_coverage_grid(results,
                        out_path=os.path.join(base, f'coverage_region_{DATASET}.pdf'))
-    plot_debug_grids(results,
-                     out_path=os.path.join(base, f'coverage_region_{DATASET}_debug.pdf'))
 
 
 if __name__ == '__main__':

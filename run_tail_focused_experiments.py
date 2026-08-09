@@ -4,11 +4,11 @@ Standard, Classwise, Label-weighted × {softmax, WPAS} for multiple alpha values
 One LaTeX table per alpha.
 
 Usage:
-    python run_rare_upweighted_results.py [dataset] [--alphas 0.1,0.05] [--n_seeds 20] [--cal_frac 0.2] [--lambda_val 100] [--rare_frac 0.05]
+    python run_tail_focused_experiments.py [dataset] [--alphas 0.1,0.05] [--n_seeds 20] [--cal_frac 0.2] [--lambda_val 100] [--rare_frac 0.05]
 
 Examples:
-    python run_rare_upweighted_results.py plantnet-trunc
-    python run_rare_upweighted_results.py plantnet-trunc --alphas 0.1 --lambda_val 100
+    python run_tail_focused_experiments.py plantnet-trunc
+    python run_tail_focused_experiments.py plantnet-trunc --alphas 0.1 --lambda_val 100
 """
 import argparse
 import os

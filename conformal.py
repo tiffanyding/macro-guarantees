@@ -190,10 +190,6 @@ def classwise_qhats(cal_scores_true, cal_labels, num_classes, alpha):
         scores_k = cal_scores_true[idx]
         qhats[k] = standard_qhat(scores_k, alpha)
 
-    # # print number of infinite qhats (classes with no cal examples)
-    # num_inf = np.isinf(qhats).sum()
-    # print(f"Classwise: {num_inf} classes have qhat=inf (because too few cal examples)")
-
     return qhats
 
 

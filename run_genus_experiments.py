@@ -4,11 +4,11 @@ Standard, Classwise, Label-weighted × {softmax, GroupPAS} for multiple alpha va
 One LaTeX table per alpha.
 
 Usage:
-    python run_genus_results.py [dataset] [--alphas 0.1,0.05] [--n_seeds 20] [--cal_frac 0.2]
+    python run_genus_experiments.py [dataset] [--alphas 0.1,0.05] [--n_seeds 20] [--cal_frac 0.2]
 
 Examples:
-    python run_genus_results.py plantnet-trunc
-    python run_genus_results.py plantnet-trunc --alphas 0.1
+    python run_genus_experiments.py plantnet-trunc
+    python run_genus_experiments.py plantnet-trunc --alphas 0.1
 """
 import argparse
 import os

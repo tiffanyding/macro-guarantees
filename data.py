@@ -116,32 +116,6 @@ def load_genus_assignments(data_dir):
     return genus_assignments, genus_names
 
 
-def _load_atrisk_mask_from_metadata(metadata_dir, at_risk_statuses):
-    """Load full at-risk mask from plantnet300K metadata JSONs."""
-    iucn_path  = os.path.join(metadata_dir, 'plantnet300K_iucn_status_dict.json')
-    idx2id_path = os.path.join(metadata_dir, 'plantnet300K_class_idx_to_species_id.json')
-    id2name_path = os.path.join(metadata_dir, 'plantnet300K_species_id_2_name.json')
-
-    with open(iucn_path) as f:
-        iucn_status = json.load(f)
-    with open(idx2id_path) as f:
-        idx2id = json.load(f)
-    with open(id2name_path) as f:
-        id2name = json.load(f)
-
-    at_risk_set = set(at_risk_statuses)
-    num_classes = len(idx2id)
-    mask = np.zeros(num_classes, dtype=bool)
-
-    for idx_str, species_id in idx2id.items():
-        idx = int(idx_str)
-        name = id2name.get(str(species_id), '')
-        if iucn_status.get(name, '') in at_risk_set:
-            mask[idx] = True
-
-    return mask
-
-
 def make_rare_mask(labels, num_classes, rare_frac=0.05):
     """
     Returns (num_classes,) bool array: True for the rarest rare_frac fraction
@@ -152,37 +126,4 @@ def make_rare_mask(labels, num_classes, rare_frac=0.05):
     rare_classes = np.argsort(counts)[:n_rare]
     mask = np.zeros(num_classes, dtype=bool)
     mask[rare_classes] = True
-    return mask
-
-
-def load_atrisk_mask(data_dir, at_risk_statuses=('NT', 'VU', 'EN', 'CR', 'EW', 'LR')):
-    """
-    Returns (num_classes,) bool array: True if species IUCN status is at-risk.
-
-    If data_dir contains a *_label_remapping.json (e.g. plantnet-trunc), loads
-    the full mask from the sibling 'plantnet' directory and projects it onto the
-    truncated class set via the remapping.
-    """
-    # Detect remapping file
-    remapping_path = None
-    for fname in os.listdir(data_dir):
-        if fname.endswith('_label_remapping.json'):
-            remapping_path = os.path.join(data_dir, fname)
-            break
-
-    if remapping_path is None:
-        return _load_atrisk_mask_from_metadata(data_dir, at_risk_statuses)
-
-    # Remapping path: load full mask from sibling 'plantnet' directory
-    metadata_dir = os.path.join(os.path.dirname(data_dir), 'plantnet')
-    full_mask = _load_atrisk_mask_from_metadata(metadata_dir, at_risk_statuses)
-
-    with open(remapping_path) as f:
-        remapping = json.load(f)  # {orig_idx_str: new_idx}
-
-    num_trunc_classes = len(remapping)
-    mask = np.zeros(num_trunc_classes, dtype=bool)
-    for orig_str, new_idx in remapping.items():
-        mask[new_idx] = full_mask[int(orig_str)]
-
     return mask

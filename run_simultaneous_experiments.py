@@ -3,12 +3,12 @@ Simultaneous MacroCov + MarginalCov table:
 Standard, Classwise, Simultaneous × {softmax, PAS, WPAS} for one (alpha_macro, alpha_marginal) pair.
 
 Usage:
-    python run_simultaneous_results.py [dataset] [--alpha_macro 0.1] [--alpha_marginal 0.05]
-                                       [--n_seeds 20] [--cal_frac 0.2] [--lambda_steps 21]
+    python run_simultaneous_experiments.py [dataset] [--alpha_macro 0.1] [--alpha_marginal 0.05]
+                                           [--n_seeds 20] [--cal_frac 0.2] [--lambda_steps 21]
 
 Examples:
-    python run_simultaneous_results.py plantnet-trunc
-    python run_simultaneous_results.py plantnet-trunc --alpha_macro 0.1 --alpha_marginal 0.05
+    python run_simultaneous_experiments.py plantnet-trunc
+    python run_simultaneous_experiments.py plantnet-trunc --alpha_macro 0.1 --alpha_marginal 0.05
 """
 import argparse
 import os

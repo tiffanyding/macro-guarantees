@@ -3,11 +3,11 @@ Main results table: Standard, Classwise, Label-weighted × {softmax, PAS}
 for multiple alpha values. One LaTeX table per alpha.
 
 Usage:
-    python run_main_results.py [dataset] [--alphas 0.1,0.05] [--n_seeds 20] [--cal_frac 0.2]
+    python run_main_experiments.py [dataset] [--alphas 0.1,0.05] [--n_seeds 20] [--cal_frac 0.2]
 
 Examples:
-    python run_main_results.py plantnet-trunc
-    python run_main_results.py plantnet-trunc --alphas 0.1 --n_seeds 50
+    python run_main_experiments.py plantnet-trunc
+    python run_main_experiments.py plantnet-trunc --alphas 0.1 --n_seeds 50
 """
 import argparse
 import os
@@ -162,14 +162,14 @@ def save_table_latex(title, results, out_path, alpha=None, label=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('dataset', nargs='?', default='plantnet-trunc',
-                        help='Dataset name (must have data/<dataset>/ directory)')
+                        help='Dataset name, either plantnet-trunc or inaturalist-trunc (must be in data/<dataset>/ directory)')
     parser.add_argument('--alphas', type=str, default='0.1,0.05',
                         help='Comma-separated miscoverage levels')
     parser.add_argument('--n_seeds', type=int, default=20)
     parser.add_argument('--cal_frac', type=float, default=0.1)
     parser.add_argument('--methods', type=str, default='standard,classwise,label_weighted',
                         help="Comma-separated list from: standard, classwise, label_weighted, "
-                             "clustered, rc3p, tacp (tacp is not yet implemented)")
+                             "clustered, rc3p")
     parser.add_argument('--raps_lambda', type=float, default=0.01,
                         help='RAPS regularization strength (only used by clustered/rc3p)')
     parser.add_argument('--raps_kreg', type=int, default=5,
